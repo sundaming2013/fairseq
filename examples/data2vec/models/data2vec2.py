@@ -22,32 +22,38 @@ from fairseq.modules import EMAModule, EMAModuleConfig
 from fairseq.dataclass import FairseqDataclass
 from fairseq.models import BaseFairseqModel, register_model
 
-from examples.data2vec.data.modality import Modality
+from data2vec.data.modality import Modality
 
-from examples.data2vec.models.modalities.base import (
+from data2vec.models.modalities.base import (
     MaskSeed,
     D2vModalityConfig,
     ModalitySpecificEncoder,
     get_annealed_rate,
 )
-from examples.data2vec.models.modalities.modules import (
+from data2vec.models.modalities.modules import (
     D2vDecoderConfig,
     AltBlock,
     Decoder1d,
 )
 
-from examples.data2vec.models.modalities.audio import (
+from data2vec.models.modalities.audio import (
     D2vAudioConfig,
     AudioEncoder,
 )
-from examples.data2vec.models.modalities.images import (
+from data2vec.models.modalities.images import (
     D2vImageConfig,
     ImageEncoder,
 )
-from examples.data2vec.models.modalities.text import (
+from data2vec.models.modalities.text import (
     D2vTextConfig,
     TextEncoder,
 )
+
+from data2vec.models.modalities.eeg import (
+    D2vEEGConfig,
+    EEGEncoder,
+)
+
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +63,7 @@ class D2vModalitiesConfig(FairseqDataclass):
     audio: D2vAudioConfig = D2vAudioConfig()
     image: D2vImageConfig = D2vImageConfig()
     text: D2vTextConfig = D2vTextConfig()
+    eeg: D2vEEGConfig = D2vEEGConfig()
 
 
 @dataclass
@@ -167,6 +174,8 @@ class Data2VecMultiModel(BaseFairseqModel):
             enc_cls = TextEncoder
             if hasattr(task, "text_task"):
                 task = task.text_task
+        elif cfg.type == Modality.EEG:
+            enc_cls = EEGEncoder
         else:
             raise Exception(f"unsupported modality {cfg.type}")
 

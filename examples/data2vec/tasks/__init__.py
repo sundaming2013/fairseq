@@ -6,6 +6,7 @@
 from .image_pretraining import ImagePretrainingTask, ImagePretrainingConfig
 from .image_classification import ImageClassificationTask, ImageClassificationConfig
 from .mae_image_pretraining import MaeImagePretrainingTask, MaeImagePretrainingConfig
+from .eeg_pretraining import EEGPretrainingTask, EEGPretrainingConfig
 
 
 __all__ = [
@@ -15,4 +16,6 @@ __all__ = [
     "ImagePretrainingConfig",
     "MaeImagePretrainingTask",
     "MaeImagePretrainingConfig",
+    "EEGPretrainingTask",
+    "EEGPretrainingConfig",
 ]

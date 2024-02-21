@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Callable, Dict, Optional
 from timm.models.layers import to_2tuple
 from fairseq.tasks import FairseqTask
-from examples.data2vec.models.mae import get_2d_sincos_pos_embed, PatchEmbed
+from data2vec.models.mae import get_2d_sincos_pos_embed, PatchEmbed
 from .base import (
     D2vModalityConfig,
     ModalitySpecificEncoder,
@@ -26,7 +26,7 @@ from .modules import (
     TransformerDecoder,
     EncDecTransformerDecoder,
 )
-from examples.data2vec.data.modality import Modality
+from data2vec.data.modality import Modality
 
 
 @dataclass

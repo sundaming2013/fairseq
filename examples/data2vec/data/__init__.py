@@ -7,6 +7,7 @@ from .image_dataset import ImageDataset
 from .path_dataset import PathDataset
 from .mae_image_dataset import MaeImageDataset
 from .mae_finetuning_image_dataset import MaeFinetuningImageDataset
+from .eeg_dataset import EEGDataset
 
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "MaeImageDataset",
     "MaeFinetuningImageDataset",
     "PathDataset",
+    "EEGDataset",
 ]

@@ -1,16 +1,12 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
-#
-# This source code is licensed under the MIT license found in the
-# LICENSE file in the root directory of this source tree.
-
 from functools import partial
 import torch
 import torch.nn as nn
 import numpy as np
 from dataclasses import dataclass, field
-from typing import Callable, Dict, Optional
-from fairseq.models.wav2vec import ConvFeatureExtractionModel
+from typing import Callable, Dict, Optional, List, Tuple
 from fairseq.modules import (
+    Fp32GroupNorm,
+    Fp32LayerNorm,
     LayerNorm,
     SamePad,
     TransposeLast,
@@ -22,8 +18,8 @@ from data2vec.data.modality import Modality
 
 
 @dataclass
-class D2vAudioConfig(D2vModalityConfig):
-    type: Modality = Modality.AUDIO
+class D2vEEGConfig(D2vModalityConfig):
+    type: Modality = Modality.EEG
     extractor_mode: str = "layer_norm"
     feature_encoder_spec: str = field(
         default="[(512, 10, 5)] + [(512, 3, 2)] * 4 + [(512,2,2)] + [(512,2,2)]",
@@ -45,15 +41,19 @@ class D2vAudioConfig(D2vModalityConfig):
         metadata={"help": "depth of positional encoder network"},
     )
     conv_pos_pre_ln: bool = False
+    in_channels: int = field(
+        default=19,
+        metadata={"help": "number of input channels"},
+    )
 
 
-class AudioEncoder(ModalitySpecificEncoder):
+class EEGEncoder(ModalitySpecificEncoder):
 
-    modality_cfg: D2vAudioConfig
+    modality_cfg: D2vEEGConfig
 
     def __init__(
         self,
-        modality_cfg: D2vAudioConfig,
+        modality_cfg: D2vEEGConfig,
         embed_dim: int,
         make_block: Callable[[float], nn.ModuleList],
         norm_layer: Callable[[int], nn.LayerNorm],
@@ -66,6 +66,7 @@ class AudioEncoder(ModalitySpecificEncoder):
         feature_embed_dim = self.feature_enc_layers[-1][0]
 
         local_encoder = ConvFeatureExtractionModel(
+            in_chs=modality_cfg.in_channels,
             conv_layers=self.feature_enc_layers,
             dropout=0.0,
             mode=modality_cfg.extractor_mode,
@@ -190,3 +191,85 @@ class AudioEncoder(ModalitySpecificEncoder):
                 mod.reset_parameters()
         if self.decoder is not None:
             self.decoder.reset_parameters()
+
+class ConvFeatureExtractionModel(nn.Module):
+    def __init__(
+        self,
+        in_chs,
+        conv_layers: List[Tuple[int, int, int]],
+        dropout: float = 0.0,
+        mode: str = "default",
+        conv_bias: bool = False,
+    ):
+        super().__init__()
+
+        assert mode in {"default", "layer_norm"}
+
+        def block(
+            n_in,
+            n_out,
+            k,
+            stride,
+            is_layer_norm=False,
+            is_group_norm=False,
+            conv_bias=False,
+        ):
+            def make_conv():
+                conv = nn.Conv1d(n_in, n_out, k, stride=stride, bias=conv_bias)
+                nn.init.kaiming_normal_(conv.weight)
+                return conv
+
+            assert (
+                is_layer_norm and is_group_norm
+            ) == False, "layer norm and group norm are exclusive"
+
+            if is_layer_norm:
+                return nn.Sequential(
+                    make_conv(),
+                    nn.Dropout(p=dropout),
+                    nn.Sequential(
+                        TransposeLast(),
+                        Fp32LayerNorm(dim, elementwise_affine=True),
+                        TransposeLast(),
+                    ),
+                    nn.GELU(),
+                )
+            elif is_group_norm:
+                return nn.Sequential(
+                    make_conv(),
+                    nn.Dropout(p=dropout),
+                    Fp32GroupNorm(dim, dim, affine=True),
+                    nn.GELU(),
+                )
+            else:
+                return nn.Sequential(make_conv(), nn.Dropout(p=dropout), nn.GELU())
+
+        in_d = in_chs
+        self.conv_layers = nn.ModuleList()
+        for i, cl in enumerate(conv_layers):
+            assert len(cl) == 3, "invalid conv definition: " + str(cl)
+            (dim, k, stride) = cl
+
+            self.conv_layers.append(
+                block(
+                    in_d,
+                    dim,
+                    k,
+                    stride,
+                    is_layer_norm=mode == "layer_norm",
+                    is_group_norm=mode == "default" and i == 0,
+                    conv_bias=conv_bias,
+                )
+            )
+            in_d = dim
+
+    def forward(self, x):
+
+        # BxT -> BxCxT
+        # x = x.unsqueeze(1)
+        # x = x.transpose(1,2)
+
+        for conv in self.conv_layers:
+            x = conv(x)
+
+        return x
